@@ -1,6 +1,6 @@
 # pixf
 
-**PDF Image Extract** - A simple yet powerful PDF toolkit for unlocking PDFs and extracting images.
+**PDF Image Extract** - A simple yet powerful PDF toolkit for unlocking PDFs and extracting images, written in Go.
 
 ## Overview
 
@@ -10,7 +10,7 @@ pixf is a command-line tool built in Go that provides two primary functionalitie
 
 ## Features
 
-- 🔓 **Unlock PDFs** - Remove password protection from encrypted PDF files
+- 🔓 **Unlock PDFs** - Remove "Honor Mode" lock protection from PDF files
 - 🖼️ **Extract Images** - Extract all images from PDF documents
 - 📁 **Multiple Formats** - Extract as original format, PNG, or WebP
 - 🚀 **Concurrent Processing** - Fast image extraction with parallel processing
@@ -32,11 +32,6 @@ go build -o pixf .
 # Optional: Add to PATH
 mv pixf /usr/local/bin/
 ```
-
-### Binary Release
-
-Download the latest binary from the [releases page](https://github.com/yourusername/pixf/releases).
-
 ## Usage
 
 ```bash
@@ -114,13 +109,13 @@ pixf --help
 - [pdfcpu](https://github.com/pdfcpu/pdfcpu) - PDF processing library
 - [chai2010/webp](https://github.com/chai2010/webp) - WebP encoding support
 
-## Roadmap
+## Future Features
 
-- [ ] PNG format with transparency (✅ implemented)
 - [ ] Image upscale
 - [ ] Image compression
 - [ ] Image cropping
-- [ ] Conversion to WebP (✅ implemented)
+- [ ] Background removal
+
 
 ## License
 
