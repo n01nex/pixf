@@ -5,6 +5,7 @@ go 1.25.6
 require github.com/pdfcpu/pdfcpu v0.11.1
 
 require (
+	github.com/chai2010/webp v1.4.0 // indirect
 	github.com/clipperhouse/uax29/v2 v2.6.0 // indirect
 	github.com/hhrutter/lzw v1.0.0 // indirect
 	github.com/hhrutter/pkcs7 v0.2.0 // indirect

@@ -1,4 +1,17 @@
 # pixf
 PDF Image eXtract
+Simple PDF Toolkit with UI
 
-Simple CLI tool, you give it a PDF, it extracts all unique images in the same repository where the PDF resides.
+## Functionalities
+- Unlock PDF
+- Extract Images
+
+## To Be implemented
+- PNG Format with transparency
+- Image upscale
+- Image compression
+- Image cropping
+- Conversion to WEBP
+
+
+
