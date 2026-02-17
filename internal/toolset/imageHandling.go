@@ -39,13 +39,14 @@ type ImageEncoder interface {
 type PNGEncoder struct{}
 
 func (PNGEncoder) Encode(w io.Writer, img *image.RGBA) error {
-	return png.Encoder{CompressionLevel: png.NoCompression}.Encode(w, img)
+	encoder := png.Encoder{CompressionLevel: png.NoCompression}
+	return encoder.Encode(w, img)
 }
 func (PNGEncoder) Extension() string { return ".png" }
 
 type WebPEncoder struct{}
 
-func (WebPEncoder) Encode(w io.Writer, img *image.RGBA) error {
+func (WebPEncoder) Encode(w git io.Writer, img *image.RGBA) error {
 	return webp.Encode(w, img, &webp.Options{Lossless: true, Quality: 100})
 }
 func (WebPEncoder) Extension() string { return ".webp" }
