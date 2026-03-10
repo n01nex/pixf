@@ -25,15 +25,21 @@ Options:
   -h, --help           Show this help message
   --unlock-only        Only unlock the PDF, do not extract images
   --extract-only       Only extract images, do not unlock the PDF first
+  --nobg               Remove background and create transparent PNG/WebP
+                       (only applicable for png and webp formats)
 
 Format Options:
   original    Extract images using PDF's native format (default)
   png         Extract as PNG with transparency support
+  png-nobg    Extract as PNG with background removed (transparent)
   webp        Extract as WebP with transparency support
+  webp-nobg   Extract as WebP with background removed (transparent)
 
 Examples:
   pixf document.pdf                    # Unlock and extract images (original format)
   pixf document.pdf png                # Unlock and extract as PNG
+  pixf document.pdf png --nobg         # Unlock and extract as PNG with transparent background
+  pixf document.pdf webp --nobg        # Unlock and extract as WebP with transparent background
   pixf --unlock-only document.pdf      # Only unlock the PDF
   pixf --extract-only document.pdf     # Only extract images from PDF
   pixf -h                              # Show this help message`)
@@ -45,6 +51,7 @@ func main() {
 	helpFlagLong := flag.Bool("help", false, "Show help")
 	unlockOnly := flag.Bool("unlock-only", false, "Only unlock the PDF")
 	extractOnly := flag.Bool("extract-only", false, "Only extract images")
+	noBg := flag.Bool("nobg", false, "Remove background for transparent PNG/WebP")
 
 	flag.Parse()
 
@@ -72,8 +79,21 @@ func main() {
 		format = strings.TrimPrefix(args[1], "--")
 	}
 
+	// Handle --nobg flag by modifying format
+	if *noBg {
+		// nobg only applies to png and webp formats
+		if format == "original" || format == "" {
+			fmt.Println("Error: --nobg flag only applies to png or webp formats")
+			os.Exit(1)
+		}
+		// Add nobg suffix to format (only if not already present)
+		if !strings.HasSuffix(format, "-nobg") {
+			format = format + "-nobg"
+		}
+	}
+
 	// Validate format
-	supportedFormats := []string{"original", "png", "webp"}
+	supportedFormats := []string{"original", "png", "png-nobg", "webp", "webp-nobg"}
 	isValidFormat := false
 	for _, f := range supportedFormats {
 		if format == f {
@@ -83,7 +103,7 @@ func main() {
 	}
 	if !isValidFormat && !*unlockOnly {
 		fmt.Printf("Error: Unsupported format '%s'\n", format)
-		fmt.Println("Supported formats: original, png, webp")
+		fmt.Println("Supported formats: original, png, png-nobg, webp, webp-nobg")
 		fmt.Println("Use 'pixf -h' for usage information")
 		os.Exit(1)
 	}
