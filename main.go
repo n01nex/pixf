@@ -75,18 +75,29 @@ func main() {
 	format := "original"
 
 	// Get format from second argument if present and not an unlock-only operation
+	// Handle both "png" and "--nobg" as format
 	if len(args) > 1 && !*unlockOnly {
-		format = strings.TrimPrefix(args[1], "--")
+		arg := args[1]
+		// If it looks like a flag (starts with --), treat it as part of flags, not format
+		if strings.HasPrefix(arg, "--") && arg != "--nobg" {
+			// It's another flag, not a format
+		} else {
+			format = strings.TrimPrefix(arg, "--")
+		}
 	}
 
 	// Handle --nobg flag by modifying format
-	if *noBg {
-		// nobg only applies to png and webp formats
-		if format == "original" || format == "" {
-			fmt.Println("Error: --nobg flag only applies to png or webp formats")
-			os.Exit(1)
-		}
-		// Add nobg suffix to format (only if not already present)
+	// Check if --nobg was provided as a flag (not in args)
+	hasNobgFlag := *noBg
+
+	// If format is "nobg" (user passed --nobg as positional arg), treat as png-nobg
+	if format == "nobg" {
+		format = "png-nobg"
+		hasNobgFlag = true
+	}
+
+	if hasNobgFlag {
+		// Add nobg suffix if not already present
 		if !strings.HasSuffix(format, "-nobg") {
 			format = format + "-nobg"
 		}
