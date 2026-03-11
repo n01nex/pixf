@@ -5,7 +5,7 @@
 ## Overview
 
 pixf is a PDF toolkit written in Go that provides two primary functionalities:
-- **Unlock PDFs**: Remove "hono" lock protection from PDF files
+- **Unlock PDFs**: Remove "honor" lock protection from PDF files
 - **Extract Images**: Extract all images from PDFs in your preferred format
 
 pixf offers two interfaces: a **Command-Line Interface (CLI)** for power users and a **Graphical User Interface (GUI)** built with Fyne for a more accessible experience.
