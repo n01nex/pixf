@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 
@@ -224,15 +225,9 @@ func mergeMasks(images []LoadedImage) []LoadedImage {
 		}
 	}
 
-	// If no masks were found, apply background removal
-	if len(result) == len(images) {
-		for i := range result {
-			if result[i].Img != nil {
-				result[i].Img = removeBackground(result[i].Img)
-			}
-		}
-	}
-
+	// If masks were found, they're already applied with transparency
+	// If no masks were found, the original images are kept as-is
+	// Background removal is handled in saveConverted instead
 	return result
 }
 
@@ -267,7 +262,7 @@ func applyAlphaMask(base *image.RGBA, mask *image.RGBA) *image.RGBA {
 	return result
 }
 
-// removeBackground removes background by detecting corner color
+// removeBackground removes background by detecting edge color and using threshold-based comparison
 func removeBackground(img *image.RGBA) *image.RGBA {
 	if img == nil {
 		return nil
@@ -277,46 +272,211 @@ func removeBackground(img *image.RGBA) *image.RGBA {
 		return img
 	}
 
-	// Sample corners
-	var bgR, bgG, bgB uint32
-	samples := 0
+	// Detect background color from all edges (not just corners)
+	// Also try common background colors like white and black as fallback
+	bgColors, dominantRatio := detectBackgroundFromEdges(img)
 
-	// Sample 4 corners
-	corners := [][2]int{
-		{bounds.Min.X, bounds.Min.Y},
-		{bounds.Max.X - 1, bounds.Min.Y},
-		{bounds.Min.X, bounds.Max.Y - 1},
-		{bounds.Max.X - 1, bounds.Max.Y - 1},
+	// Only process if dominant edge color ratio is very high (95%)
+	if dominantRatio < 0.95 {
+		return img
 	}
 
-	for _, c := range corners {
-		if c[0] >= bounds.Min.X && c[0] < bounds.Max.X && c[1] >= bounds.Min.Y && c[1] < bounds.Max.Y {
-			r, g, b, _ := img.At(c[0], c[1]).RGBA()
-			bgR += r
-			bgG += g
-			bgB += b
-			samples++
+	// Check if dominant color is near-white OR pure black
+	// We want to remove white backgrounds and pure black backgrounds
+	// But NOT near-black (dark gray) which might be content
+	isNearBlackOrWhite := false
+	for _, bg := range bgColors {
+		// Check if near-white (R,G,B all > 200)
+		if bg.R > 200 && bg.G > 200 && bg.B > 200 {
+			isNearBlackOrWhite = true
+			break
+		}
+		// Check if PURE black only (R,G,B all == 0) - not near-black
+		if bg.R == 0 && bg.G == 0 && bg.B == 0 {
+			isNearBlackOrWhite = true
+			break
 		}
 	}
 
-	if samples > 0 {
-		bgR /= uint32(samples)
-		bgG /= uint32(samples)
-		bgB /= uint32(samples)
+	if !isNearBlackOrWhite {
+		return img // Not black or white background, skip processing
+	}
+
+	// Add both white and black as fallbacks
+	bgColors = append(bgColors, color.RGBA{255, 255, 255, 255})
+	bgColors = append(bgColors, color.RGBA{0, 0, 0, 255})
+
+	if len(bgColors) == 0 {
+		return img
+	}
+
+	// Use simple pixel-by-pixel threshold-based removal
+	return simpleBackgroundRemoval(img, bgColors)
+}
+
+// detectBackgroundFromEdges samples the edges of the image to find the background color
+// Returns the dominant colors and the ratio of the most common color to total edge pixels
+func detectBackgroundFromEdges(img *image.RGBA) ([]color.RGBA, float64) {
+	if img == nil {
+		return nil, 0
+	}
+	bounds := img.Bounds()
+
+	// Collect color samples from all edges
+	var edgeColors []color.RGBA
+
+	// Sample top and bottom edges
+	for x := bounds.Min.X; x < bounds.Max.X; x++ {
+		// Top edge - include all pixels (even transparent ones)
+		r, g, b, a := img.At(x, bounds.Min.Y).RGBA()
+		edgeColors = append(edgeColors, color.RGBA{
+			R: uint8(r >> 8),
+			G: uint8(g >> 8),
+			B: uint8(b >> 8),
+			A: uint8(a >> 8),
+		})
+		// Bottom edge (skip if same as top edge for single-row images)
+		if bounds.Max.Y-1 != bounds.Min.Y {
+			r, g, b, a := img.At(x, bounds.Max.Y-1).RGBA()
+			edgeColors = append(edgeColors, color.RGBA{
+				R: uint8(r >> 8),
+				G: uint8(g >> 8),
+				B: uint8(b >> 8),
+				A: uint8(a >> 8),
+			})
+		}
+	}
+
+	// Sample left and right edges (excluding corners to avoid double-counting)
+	for y := bounds.Min.Y + 1; y < bounds.Max.Y-1; y++ {
+		// Left edge (excluding corners)
+		r, g, b, a := img.At(bounds.Min.X, y).RGBA()
+		edgeColors = append(edgeColors, color.RGBA{
+			R: uint8(r >> 8),
+			G: uint8(g >> 8),
+			B: uint8(b >> 8),
+			A: uint8(a >> 8),
+		})
+		// Right edge (excluding corners)
+		if bounds.Max.X-1 != bounds.Min.X {
+			r, g, b, a := img.At(bounds.Max.X-1, y).RGBA()
+			edgeColors = append(edgeColors, color.RGBA{
+				R: uint8(r >> 8),
+				G: uint8(g >> 8),
+				B: uint8(b >> 8),
+				A: uint8(a >> 8),
+			})
+		}
+	}
+
+	if len(edgeColors) == 0 {
+		return nil, 0
+	}
+
+	// Find the most common color among edge samples
+	colors, maxCount := findDominantColors(edgeColors, 3)
+	dominantRatio := float64(maxCount) / float64(len(edgeColors))
+
+	return colors, dominantRatio
+}
+
+// findDominantColors finds the most common colors in a slice
+// Returns the dominant colors and the count of the most common color
+func findDominantColors(colors []color.RGBA, maxColors int) ([]color.RGBA, int) {
+	if len(colors) == 0 {
+		return nil, 0
+	}
+
+	// Group similar colors together
+	colorGroups := make(map[string]int)
+	for _, c := range colors {
+		// Quantize colors to group similar ones (divide by 8 to reduce precision)
+		key := fmt.Sprintf("%d,%d,%d", c.R/8, c.G/8, c.B/8)
+		colorGroups[key]++
+	}
+
+	// Sort by frequency
+	type colorCount struct {
+		color color.RGBA
+		count int
+	}
+	var sorted []colorCount
+	for k, v := range colorGroups {
+		var r, g, b int
+		fmt.Sscanf(k, "%d,%d,%d", &r, &g, &b)
+		sorted = append(sorted, colorCount{
+			color: color.RGBA{uint8(r * 8), uint8(g * 8), uint8(b * 8), 255},
+			count: v,
+		})
+	}
+
+	// Sort by count descending
+	sort.Slice(sorted, func(i, j int) bool {
+		return sorted[i].count > sorted[j].count
+	})
+
+	// Get max count
+	maxCount := 0
+	if len(sorted) > 0 {
+		maxCount = sorted[0].count
+	}
+
+	// Return top colors
+	result := make([]color.RGBA, 0, maxColors)
+	for i := 0; i < len(sorted) && i < maxColors; i++ {
+		result = append(result, sorted[i].color)
+	}
+
+	return result, maxCount
+}
+
+// simpleBackgroundRemoval is a fallback method using threshold-based removal
+func simpleBackgroundRemoval(img *image.RGBA, bgColors []color.RGBA) *image.RGBA {
+	if img == nil {
+		return img
+	}
+	if len(bgColors) == 0 {
+		return img
+	}
+
+	bounds := img.Bounds()
+	if bounds.Empty() {
+		return img
 	}
 
 	result := image.NewRGBA(bounds)
-	threshold := uint32(10000)
+
+	scaledThreshold := uint32(3000)
 
 	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
 		for x := bounds.Min.X; x < bounds.Max.X; x++ {
 			r, g, b, a := img.At(x, y).RGBA()
 
-			dr := diff(r, bgR)
-			dg := diff(g, bgG)
-			db := diff(b, bgB)
+			// If already transparent, preserve
+			if a < 32768 {
+				result.SetRGBA(x, y, color.RGBA{
+					R: uint8(r >> 8),
+					G: uint8(g >> 8),
+					B: uint8(b >> 8),
+					A: uint8(a >> 8),
+				})
+				continue
+			}
 
-			if dr < threshold && dg < threshold && db < threshold {
+			// Check if matches any background color
+			isBackground := false
+			for _, bg := range bgColors {
+				bgR := uint32(bg.R) << 8
+				bgG := uint32(bg.G) << 8
+				bgB := uint32(bg.B) << 8
+
+				if diff(r, bgR) < scaledThreshold && diff(g, bgG) < scaledThreshold && diff(b, bgB) < scaledThreshold {
+					isBackground = true
+					break
+				}
+			}
+
+			if isBackground {
 				result.SetRGBA(x, y, color.RGBA{0, 0, 0, 0})
 			} else {
 				result.SetRGBA(x, y, color.RGBA{
