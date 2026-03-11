@@ -14,7 +14,8 @@ pixf offers two interfaces: a **Command-Line Interface (CLI)** for power users a
 
 <!-- Add your screenshot here -->
 <!-- Recommended size: 800x600 or similar aspect ratio -->
-![pixf GUI Screenshot](docs/screenshot.png)
+<img width="501" height="480" alt="image" src="https://github.com/user-attachments/assets/5f5a9bae-a5c2-476b-949a-6cabb08b07a4" />
+
 
 *Above: pixf GUI (Fyne version)*
 
